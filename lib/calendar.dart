@@ -13,11 +13,21 @@ class calendarScreen extends StatefulWidget {
 
 class _calendarScreenState extends State<calendarScreen> {
   DateTime _selectedDate = DateTime.now();
+  final TextEditingController controller = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Fetch todos for the current date when the screen loads
+    final todoProvider = Provider.of<TodoProvider>(context, listen: false);
+    todoProvider.fetchTodos(_selectedDate);
+  }
+
   @override
   Widget build(BuildContext context) {
     final todoProvider = Provider.of<TodoProvider>(context);
-    final TextEditingController _controller = TextEditingController();
-    final Set<DateTime> datesWithTodos = todoProvider.getDatesWithTodos();
+    //final Set<DateTime> datesWithTodos = todoProvider.getDatesWithTodos();
+
     return SingleChildScrollView(
       child: Column(
         children: [
@@ -25,30 +35,51 @@ class _calendarScreenState extends State<calendarScreen> {
             focusedDay: _selectedDate,
             firstDay: DateTime.utc(2020, 1, 1),
             lastDay: DateTime.utc(2030, 12, 31),
-            onDaySelected: (selectedDay, focusedDay) => {
+            onDaySelected: (selectedDay, focusedDay) async {
               setState(() {
                 _selectedDate = selectedDay;
-              })
+              });
+              await todoProvider.fetchTodos(selectedDay);
+              // Fetch todos for selected day
             },
-            calendarBuilders:
-                CalendarBuilders(defaultBuilder: (context, day, focusedDay) {
-              if (datesWithTodos.contains(day)) {
-                return Container(
-                  margin: const EdgeInsets.all(4.0),
-                  padding: const EdgeInsets.all(8.0),
-                  decoration: BoxDecoration(
-                    color: Colors.deepPurple.withOpacity(0.6),
-                    borderRadius: BorderRadius.circular(8.0),
-                  ),
-                  child: Center(
-                    child: Text(
-                      '${day.day}',
-                      style: const TextStyle(color: Colors.white),
+            calendarBuilders: CalendarBuilders(
+              defaultBuilder: (context, day, focusedDay) {
+                bool hasTodos = todoProvider.getTodos(day).isNotEmpty;
+                if (day == focusedDay) {
+                  return Container(
+                    margin: const EdgeInsets.all(4.0),
+                    padding: const EdgeInsets.all(8.0),
+                    decoration: BoxDecoration(
+                      color: Colors.deepPurple.withOpacity(0.6),
+                      borderRadius: BorderRadius.circular(8.0),
                     ),
-                  ),
-                );
-              }
-            }),
+                    child: Center(
+                      child: Text(
+                        '${day.day}',
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  );
+                } else if (hasTodos) {
+                  return Container(
+                    margin: const EdgeInsets.all(4.0),
+                    padding: const EdgeInsets.all(8.0),
+                    decoration: BoxDecoration(
+                      color:
+                          const Color.fromARGB(255, 8, 4, 15).withOpacity(0.6),
+                      borderRadius: BorderRadius.circular(8.0),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '${day.day}',
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  );
+                }
+                return null;
+              },
+            ),
           ),
           Padding(
             padding: const EdgeInsets.all(20.0),
@@ -68,14 +99,19 @@ class _calendarScreenState extends State<calendarScreen> {
                         final todo =
                             todoProvider.getTodos(_selectedDate)[index];
                         return Slidable(
-                          // Add key for better performance
                           key: ValueKey(todo),
                           endActionPane: ActionPane(
                             motion: const StretchMotion(),
                             children: [
                               SlidableAction(
-                                onPressed: (context) {
-                                  todoProvider.removetodo(_selectedDate, todo);
+                                onPressed: (context) async {
+                                  final success = await todoProvider.removeTodo(
+                                      _selectedDate,
+                                      todo); // Delete the todo and get success status
+                                  if (success) {
+                                    await todoProvider.fetchTodos(
+                                        _selectedDate); // Fetch the updated list
+                                  }
                                 },
                                 backgroundColor: Colors.red,
                                 foregroundColor: Colors.white,
@@ -83,28 +119,19 @@ class _calendarScreenState extends State<calendarScreen> {
                                 label: 'Delete',
                                 borderRadius: BorderRadius.circular(14),
                               ),
-                              /*   SlidableAction(
-                                onPressed: (context) {
-                                  // Add more actions like "Edit" here
-                                  todoProvider.toggleComplete(todo);
-                                },
-                                backgroundColor: Colors.blue,
-                                foregroundColor: Colors.white,
-                                icon: Icons.edit,
-                                label: 'Edit',
-                              ),
-                              */
                             ],
                           ),
                           child: ListTile(
-                            title: Text(todo.title,
-                                style: TextStyle(
-                                  decoration: todo.isDone
-                                      ? TextDecoration.lineThrough
-                                      : null,
-                                )),
+                            title: Text(
+                              todo.title,
+                              style: TextStyle(
+                                decoration: todo.isDone
+                                    ? TextDecoration.lineThrough
+                                    : null,
+                              ),
+                            ),
                             onTap: () {
-                              todoProvider.status(_selectedDate, todo);
+                              // Implement toggle status if needed
                             },
                           ),
                         );
@@ -122,11 +149,21 @@ class _calendarScreenState extends State<calendarScreen> {
                         ),
                         height: 300,
                         child: TextField(
-                          controller: _controller,
+                          controller: controller,
                           onSubmitted: (value) {
                             if (value.isNotEmpty) {
-                              todoProvider.addTodo(_selectedDate, value);
-                              _controller.clear();
+                              todoProvider
+                                  .addTodo(_selectedDate, value)
+                                  .then((_) {
+                                controller.clear();
+                              }).catchError((error) {
+                                // Handle error (e.g., show a message)
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                      content:
+                                          Text('Failed to add todo: $error')),
+                                );
+                              });
                             }
                           },
                           decoration:
