@@ -14,6 +14,7 @@ class calendarScreen extends StatefulWidget {
 class _calendarScreenState extends State<calendarScreen> {
   DateTime _selectedDate = DateTime.now();
   final TextEditingController controller = TextEditingController();
+  Color selectedDayColor = Colors.grey.withOpacity(0.6); // Default color
 
   @override
   void initState() {
@@ -44,13 +45,25 @@ class _calendarScreenState extends State<calendarScreen> {
             },
             calendarBuilders: CalendarBuilders(
               defaultBuilder: (context, day, focusedDay) {
+                // Color dayColor =
+                //  hasTodos ? Colors.red : Colors.grey.withOpacity(0.6);
                 bool hasTodos = todoProvider.getTodos(day).isNotEmpty;
+
+                selectedDayColor = hasTodos
+                    ? const Color.fromARGB(255, 8, 4, 15).withOpacity(0.6)
+                    : Colors.deepPurple.withOpacity(0.6);
+                Color dayColor = hasTodos
+                    ? _getColorFromHex(todoProvider
+                        .getTodos(day)
+                        .first
+                        .color) // Use the color of the first todo
+                    : Colors.grey.withOpacity(0.6); // Default color if no todos
                 if (day == focusedDay) {
                   return Container(
                     margin: const EdgeInsets.all(4.0),
                     padding: const EdgeInsets.all(8.0),
                     decoration: BoxDecoration(
-                      color: Colors.deepPurple.withOpacity(0.6),
+                      color: dayColor,
                       borderRadius: BorderRadius.circular(8.0),
                     ),
                     child: Center(
@@ -65,8 +78,7 @@ class _calendarScreenState extends State<calendarScreen> {
                     margin: const EdgeInsets.all(4.0),
                     padding: const EdgeInsets.all(8.0),
                     decoration: BoxDecoration(
-                      color:
-                          const Color.fromARGB(255, 8, 4, 15).withOpacity(0.6),
+                      color: dayColor,
                       borderRadius: BorderRadius.circular(8.0),
                     ),
                     child: Center(
@@ -128,8 +140,12 @@ class _calendarScreenState extends State<calendarScreen> {
                                 decoration: todo.isDone
                                     ? TextDecoration.lineThrough
                                     : null,
+                                color: _getColorFromHex(todo
+                                    .color), // Use the helper function), // Convert hex to Color
                               ),
                             ),
+                            tileColor: _getColorFromHex(todo
+                                .color), // Set background colorbackground color
                             onTap: () {
                               // Implement toggle status if needed
                             },
@@ -152,8 +168,14 @@ class _calendarScreenState extends State<calendarScreen> {
                           controller: controller,
                           onSubmitted: (value) {
                             if (value.isNotEmpty) {
+                              String colorString = selectedDayColor.value
+                                  .toRadixString(16)
+                                  .padLeft(8, '0')
+                                  .substring(
+                                      2); // Get the 6-character hex without alpha
+
                               todoProvider
-                                  .addTodo(_selectedDate, value)
+                                  .addTodo(_selectedDate, value, colorString)
                                   .then((_) {
                                 controller.clear();
                               }).catchError((error) {
@@ -180,4 +202,13 @@ class _calendarScreenState extends State<calendarScreen> {
       ),
     );
   }
+}
+
+Color _getColorFromHex(String colorString) {
+  // Remove '#' if present
+  if (colorString.startsWith('#')) {
+    colorString = colorString.substring(1);
+  }
+  // Parse the hex string to a Color
+  return Color(int.parse('0xff$colorString'));
 }
